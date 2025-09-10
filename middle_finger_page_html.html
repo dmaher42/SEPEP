@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Middle Finger – Minimal Page</title>
+  <style>
+    :root{
+      --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
+      --skin:#f1c27d; --skin-shade:#e0ac69; --accent:#38bdf8;
+    }
+    html,body{height:100%}
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+      color:var(--text); background:radial-gradient(1200px 700px at 50% -10%, #13243f 0%, var(--bg) 55%);
+      display:grid; place-items:center; padding:24px;
+    }
+    .card{
+      background:linear-gradient(180deg, #12203a, var(--panel));
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:24px; box-shadow:0 30px 60px rgba(0,0,0,.45);
+      width:min(680px, 92vw); padding:24px 24px 28px; text-align:center;
+    }
+    h1{font-size:clamp(20px, 2.4vw, 28px); margin:0 0 6px}
+    p{color:var(--muted); margin:0 0 18px}
+
+    /* Hand layout */
+    .stage{display:grid; place-items:center; padding:18px;}
+    .hand{
+      position:relative; width:220px; height:230px;
+      transform:translateY(6px);
+      filter: drop-shadow(0 14px 24px rgba(0,0,0,.45));
+    }
+    .palm{
+      position:absolute; left:28px; bottom:20px; width:164px; height:130px;
+      background:linear-gradient(180deg, var(--skin), var(--skin-shade));
+      border-radius:36px; border:2px solid rgba(0,0,0,.25);
+    }
+    .wrist{
+      position:absolute; left:70px; bottom:0; width:80px; height:28px;
+      background:linear-gradient(180deg, var(--skin), var(--skin-shade));
+      border-left:2px solid rgba(0,0,0,.25); border-right:2px solid rgba(0,0,0,.25);
+      border-bottom:2px solid rgba(0,0,0,.25); border-top-left-radius:18px; border-top-right-radius:18px;
+    }
+    .finger{ position:absolute; width:42px; background:linear-gradient(180deg, var(--skin), var(--skin-shade)); border:2px solid rgba(0,0,0,.25); }
+    .finger:after{ content:""; position:absolute; left:6px; right:6px; top:7px; height:6px; background:rgba(0,0,0,.08); border-radius:3px; }
+
+    /* Middle finger (raised) */
+    .f-mid{ left:88px; bottom:138px; height:160px; border-top-left-radius:18px; border-top-right-radius:18px; border-bottom-left-radius:14px; border-bottom-right-radius:14px; }
+
+    /* Other fingers (bent) */
+    .f-index{ left:48px; bottom:150px; height:80px; border-radius:14px; transform:rotate(6deg); transform-origin:bottom center; }
+    .f-ring{ left:128px; bottom:150px; height:78px; border-radius:14px; transform:rotate(-6deg); transform-origin:bottom center; }
+    .f-pinky{ left:164px; bottom:146px; height:70px; border-radius:14px; transform:rotate(-10deg); transform-origin:bottom center; width:36px; }
+
+    /* Thumb crossing the palm */
+    .thumb{ position:absolute; left:0; bottom:88px; width:100px; height:46px; background:linear-gradient(180deg, var(--skin), var(--skin-shade)); border:2px solid rgba(0,0,0,.25); border-radius:28px; transform:rotate(-26deg); transform-origin:right center; }
+
+    /* Sleeve */
+    .sleeve{ position:absolute; left:52px; bottom:-2px; width:124px; height:34px; background:linear-gradient(180deg, #1f2b46, #16233d); border:1px solid rgba(255,255,255,.06); border-radius:10px; }
+
+    /* Blur/Unblur control (optional for discretion) */
+    .veil{ filter:blur(10px); transition:filter .25s ease; }
+    .unblur .veil{ filter:blur(0); }
+
+    .controls{ display:flex; gap:12px; justify-content:center; margin-top:12px; flex-wrap:wrap; }
+    button{
+      appearance:none; border:none; cursor:pointer;
+      background:linear-gradient(180deg, #1f2b46, #16233d);
+      color:var(--text); padding:10px 14px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.08);
+      font-weight:600; letter-spacing:.2px;
+    }
+    button:focus-visible{ outline:3px solid #53c8ff55; outline-offset:2px; }
+    .note{ font-size:12px; color:var(--muted); margin-top:6px }
+  </style>
+</head>
+<body>
+  <main class="card" id="card">
+    <h1>Gesture Demo</h1>
+    <p>A simple page that renders a stylized hand with the middle finger raised.</p>
+
+    <div class="stage" id="stage">
+      <div class="hand veil" id="hand">
+        <div class="wrist"></div>
+        <div class="palm"></div>
+        <div class="thumb"></div>
+
+        <div class="finger f-index"></div>
+        <div class="finger f-mid" title="🖕"></div>
+        <div class="finger f-ring"></div>
+        <div class="finger f-pinky"></div>
+
+        <div class="sleeve"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="toggle">Show Gesture</button>
+      <button id="download">Download as PNG</button>
+    </div>
+    <div class="note">Blurred by default. Click “Show Gesture” to reveal. Download captures just the hand area.</div>
+  </main>
+
+  <script>
+    const hand = document.getElementById('hand');
+    const stage = document.getElementById('stage');
+    const toggleBtn = document.getElementById('toggle');
+    const card = document.getElementById('card');
+
+    toggleBtn.addEventListener('click', ()=>{
+      card.classList.toggle('unblur');
+      toggleBtn.textContent = card.classList.contains('unblur') ? 'Hide Gesture' : 'Show Gesture';
+    });
+
+    // Simple DOM-to-canvas capture for the hand only (no external libs)
+    // Uses SVG foreignObject trick for modern browsers.
+    document.getElementById('download').addEventListener('click', () => {
+      const node = hand;
+      const { width, height } = node.getBoundingClientRect();
+      const svg = `\n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"${Math.ceil(width)}\" height=\"${Math.ceil(height)}\">\n  <foreignObject width=\"100%\" height=\"100%\">\n    ${new XMLSerializer().serializeToString(node.cloneNode(true))}\n  </foreignObject>\n</svg>`;
+
+      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(width);
+        canvas.height = Math.ceil(height);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((pngBlob) => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(pngBlob);
+          a.download = 'gesture.png';
+          a.click();
+        }, 'image/png');
+      };
+      img.src = url;
+    });
+  </script>
+</body>
+</html>
