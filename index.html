@@ -74,6 +74,42 @@
     }
     button:focus-visible{ outline:3px solid #53c8ff55; outline-offset:2px; }
     .note{ font-size:12px; color:var(--muted); margin-top:6px }
+
+    #results{
+      margin-top:24px;
+      padding:18px;
+      background:rgba(15,23,42,.65);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:18px;
+      text-align:left;
+    }
+    .results-title{
+      margin:0 0 12px;
+      font-size:clamp(16px, 1.8vw, 20px);
+    }
+    .results-body{
+      max-height:280px;
+      overflow:auto;
+    }
+    .results-table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:14px;
+    }
+    .results-table th,
+    .results-table td{
+      padding:8px 10px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
+    .results-table th{
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .results-table tr:last-child td{ border-bottom:none; }
+    .status{ color:var(--muted); font-size:14px; margin:0; }
+    .status.error{ color:#f87171; }
   </style>
 </head>
 <body>
@@ -100,6 +136,10 @@
       <button id="toggle">Show Gesture</button>
       <button id="download">Download as PNG</button>
     </div>
+    <section id="results" class="results" aria-live="polite">
+      <h2 class="results-title">Latest Sheet Data</h2>
+      <div class="results-body" id="results-body"></div>
+    </section>
     <div class="note">Blurred by default. Click “Show Gesture” to reveal. Download captures just the hand area.</div>
   </main>
 
@@ -141,6 +181,139 @@
       };
       img.src = url;
     });
+
+    const resultsBody = document.getElementById('results-body');
+    // Sheet published via “File → Share → Publish to web” so it can be fetched anonymously.
+    const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/gviz/tq?tqx=out:json';
+
+    function updateResultsStatus(message, type = 'info') {
+      if (!resultsBody) return;
+      resultsBody.innerHTML = '';
+      const status = document.createElement('p');
+      status.className = type === 'error' ? 'status error' : 'status';
+      status.textContent = message;
+      resultsBody.appendChild(status);
+    }
+
+    async function loadSheetData() {
+      if (!resultsBody) return;
+      updateResultsStatus('Loading…');
+
+      try {
+        const response = await fetch(SHEET_URL, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+
+        const text = await response.text();
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+
+        if (start === -1 || end === -1) {
+          throw new Error('Unexpected response format');
+        }
+
+        const data = JSON.parse(text.substring(start, end + 1));
+        const table = data.table || {};
+        const rows = table.rows || [];
+
+        if (!rows.length || !rows[0] || !rows[0].c) {
+          updateResultsStatus('No data available right now.');
+          return;
+        }
+
+        const headerRow = rows[0].c;
+        const activeColumns = [];
+
+        for (let i = 0; i < headerRow.length; i += 1) {
+          const headerCell = headerRow[i] || {};
+          const headerValue = headerCell.v !== undefined && headerCell.v !== null ? headerCell.v : '';
+          let hasData = false;
+
+          for (let r = 1; r < rows.length; r += 1) {
+            const rowCells = rows[r] && rows[r].c ? rows[r].c : [];
+            const cell = rowCells[i] || {};
+            const rawValue = cell.f !== undefined && cell.f !== null ? cell.f : cell.v;
+            if (rawValue !== undefined && rawValue !== null && rawValue !== '') {
+              hasData = true;
+              break;
+            }
+          }
+
+          if (headerValue !== '' || hasData) {
+            activeColumns.push({
+              index: i,
+              header: headerValue !== '' ? headerValue : `Column ${i + 1}`
+            });
+          }
+        }
+
+        if (!activeColumns.length) {
+          updateResultsStatus('No data available right now.');
+          return;
+        }
+
+        const tableEl = document.createElement('table');
+        tableEl.className = 'results-table';
+
+        const thead = document.createElement('thead');
+        const headRowEl = document.createElement('tr');
+
+        activeColumns.forEach((col) => {
+          const th = document.createElement('th');
+          th.textContent = col.header;
+          headRowEl.appendChild(th);
+        });
+
+        thead.appendChild(headRowEl);
+        tableEl.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+
+        for (let r = 1; r < rows.length; r += 1) {
+          const rowData = rows[r];
+          if (!rowData || !rowData.c) {
+            continue;
+          }
+
+          const tr = document.createElement('tr');
+          let rowHasContent = false;
+
+          activeColumns.forEach((col) => {
+            const cell = rowData.c[col.index] || {};
+            const rawValue = cell.f !== undefined && cell.f !== null ? cell.f : cell.v;
+            const value = rawValue !== undefined && rawValue !== null ? rawValue : '';
+
+            if (value !== '') {
+              rowHasContent = true;
+            }
+
+            const td = document.createElement('td');
+            td.textContent = value;
+            tr.appendChild(td);
+          });
+
+          if (rowHasContent) {
+            tbody.appendChild(tr);
+          }
+        }
+
+        if (!tbody.children.length) {
+          updateResultsStatus('No data available right now.');
+          return;
+        }
+
+        tableEl.appendChild(tbody);
+
+        resultsBody.innerHTML = '';
+        resultsBody.appendChild(tableEl);
+      } catch (error) {
+        console.error('Failed to load sheet data', error);
+        updateResultsStatus('Unable to load data from the sheet. Please try again later.', 'error');
+      }
+    }
+
+    loadSheetData();
   </script>
 </body>
 </html>
